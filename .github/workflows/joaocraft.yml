@@ -1,0 +1,50 @@
+name: joaocraft-apk
+
+# Compila o APK do JoaoCraft na nuvem (gratis). Gera APKs assinados
+# prontos para instalar no celular (sideload). Roda a cada push na main
+# que mexa no app, ou manualmente em Actions > Run workflow.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'android/**'
+      - '.github/workflows/joaocraft.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install gettext (msgfmt for translations)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends gettext
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Build release APKs
+        run: cd android && ./gradlew assemblerelease --stacktrace
+
+      - name: Sign APKs with JoaoCraft dev key
+        run: |
+          BT=$(find "$ANDROID_HOME/build-tools" -maxdepth 1 -type d | sort -V | tail -1)
+          echo "Using build-tools: $BT"
+          for f in android/app/build/outputs/apk/release/*-unsigned.apk; do
+            base=$(basename "$f" -unsigned.apk)
+            "$BT/zipalign" -f -p 4 "$f" signed-tmp.apk
+            "$BT/apksigner" sign --ks android/joaocraft-debug.keystore \
+              --ks-pass:joaocraft123 --key-pass:joaocraft123 --ks-key-alias joaocraft \
+              --out "android/app/build/outputs/apk/release/${base}-joaocraft.apk" signed-tmp.apk
+          done
+          rm -f signed-tmp.apk
+          ls -lh android/app/build/outputs/apk/release/*-joaocraft.apk
+
+      - name: Upload signed APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: JoaoCraft-apks
+          path: android/app/build/outputs/apk/release/*-joaocraft.apk
