@@ -10,16 +10,41 @@ import android.util.Log;
 
 import androidx.annotation.Keep;
 
+import com.k2fsa.sherpa.onnx.FeatureConfig;
 import com.k2fsa.sherpa.onnx.GeneratedAudio;
+import com.k2fsa.sherpa.onnx.HomophoneReplacerConfig;
+import com.k2fsa.sherpa.onnx.OfflineCanaryModelConfig;
+import com.k2fsa.sherpa.onnx.OfflineCohereTranscribeModelConfig;
+import com.k2fsa.sherpa.onnx.OfflineDolphinModelConfig;
+import com.k2fsa.sherpa.onnx.OfflineFireRedAsrCtcModelConfig;
+import com.k2fsa.sherpa.onnx.OfflineFireRedAsrModelConfig;
+import com.k2fsa.sherpa.onnx.OfflineFunAsrNanoModelConfig;
+import com.k2fsa.sherpa.onnx.OfflineMedAsrCtcModelConfig;
 import com.k2fsa.sherpa.onnx.OfflineModelConfig;
+import com.k2fsa.sherpa.onnx.OfflineMoonshineModelConfig;
+import com.k2fsa.sherpa.onnx.OfflineNemoEncDecCtcModelConfig;
+import com.k2fsa.sherpa.onnx.OfflineOmnilingualAsrCtcModelConfig;
+import com.k2fsa.sherpa.onnx.OfflineParaformerModelConfig;
+import com.k2fsa.sherpa.onnx.OfflineQwen3AsrModelConfig;
 import com.k2fsa.sherpa.onnx.OfflineRecognizer;
 import com.k2fsa.sherpa.onnx.OfflineRecognizerConfig;
+import com.k2fsa.sherpa.onnx.OfflineSenseVoiceModelConfig;
 import com.k2fsa.sherpa.onnx.OfflineStream;
+import com.k2fsa.sherpa.onnx.OfflineTransducerModelConfig;
 import com.k2fsa.sherpa.onnx.OfflineTts;
 import com.k2fsa.sherpa.onnx.OfflineTtsConfig;
+import com.k2fsa.sherpa.onnx.OfflineTtsKittenModelConfig;
+import com.k2fsa.sherpa.onnx.OfflineTtsKokoroModelConfig;
+import com.k2fsa.sherpa.onnx.OfflineTtsMatchaModelConfig;
 import com.k2fsa.sherpa.onnx.OfflineTtsModelConfig;
+import com.k2fsa.sherpa.onnx.OfflineTtsPocketModelConfig;
+import com.k2fsa.sherpa.onnx.OfflineTtsSupertonicModelConfig;
 import com.k2fsa.sherpa.onnx.OfflineTtsVitsModelConfig;
+import com.k2fsa.sherpa.onnx.OfflineTtsZipVoiceModelConfig;
+import com.k2fsa.sherpa.onnx.OfflineWenetCtcModelConfig;
 import com.k2fsa.sherpa.onnx.OfflineWhisperModelConfig;
+import com.k2fsa.sherpa.onnx.OfflineZipformerCtcModelConfig;
+import com.k2fsa.sherpa.onnx.QnnConfig;
 
 import java.io.BufferedInputStream;
 import java.io.File;
@@ -75,6 +100,42 @@ public class SherpaVoice {
 		return downloading;
 	}
 
+	// Construtores da API Kotlin do AAR (data classes: todos os args na ordem).
+	private static OfflineModelConfig modeloStt(String enc, String dec, String tok, int threads) {
+		QnnConfig qnn = new QnnConfig("", "", "");
+		return new OfflineModelConfig(
+				new OfflineTransducerModelConfig("", "", "", qnn),
+				new OfflineParaformerModelConfig("", qnn),
+				new OfflineWhisperModelConfig(enc, dec, "pt", "transcribe", 1000, false, false),
+				new OfflineFireRedAsrModelConfig("", ""),
+				new OfflineMoonshineModelConfig("", "", "", "", ""),
+				new OfflineNemoEncDecCtcModelConfig(""),
+				new OfflineSenseVoiceModelConfig("", "", true, qnn),
+				new OfflineDolphinModelConfig(""),
+				new OfflineZipformerCtcModelConfig("", qnn),
+				new OfflineWenetCtcModelConfig(""),
+				new OfflineOmnilingualAsrCtcModelConfig(""),
+				new OfflineMedAsrCtcModelConfig(""),
+				new OfflineFunAsrNanoModelConfig("", "", "", "", "Voce e util.", "", 128, 1e-6f, 0.8f, 42, "", true, ""),
+				new OfflineQwen3AsrModelConfig("", "", "", "", 512, 128, 1e-6f, 0.8f, 42, ""),
+				new OfflineFireRedAsrCtcModelConfig(""),
+				new OfflineCanaryModelConfig("", "", "en", "en", true),
+				new OfflineCohereTranscribeModelConfig("", "", "", true, true),
+				"", threads, false, "cpu", "", tok, "", "");
+	}
+
+	private static OfflineTtsModelConfig modeloTts(OfflineTtsVitsModelConfig vits) {
+		return new OfflineTtsModelConfig(
+				vits,
+				new OfflineTtsMatchaModelConfig("", "", "", "", "", "", 1.0f, 1.0f),
+				new OfflineTtsKokoroModelConfig("", "", "", "", "", "", "", 1.0f),
+				new OfflineTtsZipVoiceModelConfig("", "", "", "", "", "", 0.1f, 0.5f, 0.1f, 1.0f),
+				new OfflineTtsKittenModelConfig("", "", "", "", 1.0f),
+				new OfflineTtsPocketModelConfig("", "", "", "", "", "", "", 50),
+				new OfflineTtsSupertonicModelConfig("", "", "", "", "", "", ""),
+				2, false, "cpu");
+	}
+
 	/** Tenta carregar modelos já baixados. Retorna true se STT+TTS prontos. */
 	public static synchronized boolean tryLoad(Context ctx) {
 		try {
@@ -85,24 +146,13 @@ public class SherpaVoice {
 			if (enc.exists() && dec.exists() && tok.exists() && recognizer == null) {
 				int threads = Math.max(1, Math.min(2,
 						Runtime.getRuntime().availableProcessors()));
-				OfflineWhisperModelConfig whisper =
-						OfflineWhisperModelConfig.builder()
-								.setEncoder(enc.getAbsolutePath())
-								.setDecoder(dec.getAbsolutePath())
-								.setLanguage("pt")
-								.setTask("transcribe")
-								.build();
-				OfflineModelConfig model = OfflineModelConfig.builder()
-						.setWhisper(whisper)
-						.setTokens(tok.getAbsolutePath())
-						.setNumThreads(threads)
-						.setDebug(false)
-						.build();
-				OfflineRecognizerConfig config = OfflineRecognizerConfig.builder()
-						.setOfflineModelConfig(model)
-						.setDecodingMethod("greedy_search")
-						.build();
-				recognizer = new OfflineRecognizer(config);
+				OfflineRecognizerConfig config = new OfflineRecognizerConfig(
+						new FeatureConfig(16000, 80, 0.0f),
+						modeloStt(enc.getAbsolutePath(), dec.getAbsolutePath(),
+								tok.getAbsolutePath(), threads),
+						new HomophoneReplacerConfig("", "", ""),
+						"greedy_search", 4, "", 1.5f, "", "", 0.0f);
+				recognizer = new OfflineRecognizer(null, config);
 			}
 		} catch (Exception e) {
 			Log.e(TAG, "STT load falhou", e);
@@ -115,45 +165,25 @@ public class SherpaVoice {
 		}
 		try {
 			File onnx = new File(baseDir(ctx), "piper/pt_BR-cadu-medium.onnx");
-			File json = new File(baseDir(ctx), "piper/pt_BR-cadu-medium.onnx.json");
 			File tokens = new File(baseDir(ctx), "piper/tokens.txt");
 			File espeak = new File(baseDir(ctx), "piper/espeak-ng-data");
-			if (onnx.exists() && json.exists() && tokens.exists()
+			if (onnx.exists() && tokens.exists()
 					&& espeak.exists() && tts == null) {
 				// dataDir: tenta o dir do modelo primeiro, cai para o espeak direto
-				String dataDir = new File(baseDir(ctx), "piper").getAbsolutePath();
-				OfflineTtsVitsModelConfig vits;
-				try {
-					vits = OfflineTtsVitsModelConfig.builder()
-							.setModel(onnx.getAbsolutePath())
-							.setTokens(tokens.getAbsolutePath())
-							.setDataDir(dataDir)
-							.setNoiseScale(0.667f)
-							.setNoiseScaleW(0.8f)
-							.setLengthScale(1.0f)
-							.build();
-					tts = new OfflineTts(OfflineTtsConfig.builder()
-							.setModel(OfflineTtsModelConfig.builder()
-									.setVits(vits)
-									.setNumThreads(2)
-									.setDebug(false)
-									.build())
-							.setMaxNumSentences(10)
-							.build());
-				} catch (Exception e1) {
-					Log.w(TAG, "TTS dataDir modelo falhou, tentando espeak direto", e1);
-					vits = OfflineTtsVitsModelConfig.builder()
-							.setModel(onnx.getAbsolutePath())
-							.setTokens(tokens.getAbsolutePath())
-							.setDataDir(espeak.getAbsolutePath())
-							.build();
-					tts = new OfflineTts(OfflineTtsConfig.builder()
-							.setModel(OfflineTtsModelConfig.builder()
-									.setVits(vits)
-									.setNumThreads(2)
-									.setDebug(false)
-									.build())
-							.build());
+				String[] tentativas = {
+						new File(baseDir(ctx), "piper").getAbsolutePath(),
+						espeak.getAbsolutePath() };
+				for (String dataDir : tentativas) {
+					try {
+						OfflineTtsVitsModelConfig vits = new OfflineTtsVitsModelConfig(
+								onnx.getAbsolutePath(), "", tokens.getAbsolutePath(),
+								dataDir, "", 0.667f, 0.8f, 1.0f);
+						tts = new OfflineTts(null, new OfflineTtsConfig(
+								modeloTts(vits), "", "", 10, 0.2f));
+						break;
+					} catch (Exception e1) {
+						Log.w(TAG, "TTS dataDir falhou: " + dataDir, e1);
+					}
 				}
 			}
 		} catch (Exception e) {
