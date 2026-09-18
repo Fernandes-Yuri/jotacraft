@@ -37,7 +37,7 @@ jobs:
             base=$(basename "$f" -unsigned.apk)
             "$BT/zipalign" -f -p 4 "$f" signed-tmp.apk
             "$BT/apksigner" sign --ks android/joaocraft-debug.keystore \
-              --ks-pass:joaocraft123 --key-pass:joaocraft123 --ks-key-alias joaocraft \
+              --ks-pass pass:joaocraft123 --key-pass pass:joaocraft123 --ks-key-alias joaocraft \
               --out "android/app/build/outputs/apk/release/${base}-joaocraft.apk" signed-tmp.apk
           done
           rm -f signed-tmp.apk
