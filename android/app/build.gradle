@@ -34,6 +34,7 @@ android {
 		buildTypes {
 			release {
 				minifyEnabled true
+				proguardFiles 'proguard-joaocraft.pro'
 				signingConfig signingConfigs.release
 			}
 		}
@@ -134,4 +135,5 @@ clean {
 dependencies {
 	implementation project(':native')
 	implementation 'androidx.appcompat:appcompat:1.6.1'
+	implementation 'com.github.k2-fsa.sherpa-onnx:sherpa-onnx:v1.13.7' // STT+TTS offline
 }

@@ -103,6 +103,27 @@ public class VoiceOverlay {
 		});
 		initTts();
 		startReplyPolling();
+		initOfflineVoice();
+	}
+
+	// Voz 100% offline (sherpa-onnx): baixa os modelos uma vez e depois
+	// funciona sem internet e sem Google. Enquanto baixa, o mic usa Google.
+	private void initOfflineVoice() {
+		new Thread(() -> {
+			boolean ready = SherpaVoice.tryLoad(activity);
+			if (ready) {
+				toast("Voz offline pronta!");
+				return;
+			}
+			SherpaVoice.ensureModels(activity, new SherpaVoice.ProgressCb() {
+				@Override public void onProgress(String file, int percent) {
+					if (percent % 25 == 0) toast("Baixando voz: " + percent + "%");
+				}
+				@Override public void onDone(boolean ok, String msg) {
+					toast(ok ? "Voz offline pronta!" : msg);
+				}
+			});
+		}).start();
 	}
 
 	public void detach() {
@@ -131,6 +152,10 @@ public class VoiceOverlay {
 	}
 
 	private void onMicTap() {
+		if (SherpaVoice.isCapturing()) {
+			SherpaVoice.stopCapture();
+			return;
+		}
 		if (listening) {
 			stopListening();
 			return;
@@ -143,12 +168,45 @@ public class VoiceOverlay {
 			toast("Permita o microfone e toque de novo");
 			return;
 		}
+		if (SherpaVoice.isSttReady()) {
+			startOfflineListening();
+			return;
+		}
+		// Modelos ainda baixando: usa Google por enquanto
 		if (!SpeechRecognizer.isRecognitionAvailable(activity)) {
 			toast("Reconhecimento de voz indisponível");
 			return;
 		}
 		startListening();
 	}
+
+	// Ouve com whisper no aparelho: toca pra começar, toca pra parar
+	// (ou para sozinho no silêncio).
+	private void startOfflineListening() {
+		listening = true;
+		main.post(() -> micButton.setBackgroundColor(0xAA3355AA));
+		toast("Ouvindo offline... toque pra parar");
+		SherpaVoice.startCapture(samples -> {
+			listening = false;
+			main.post(() -> micButton.setBackgroundColor(0xAA222222));
+			if (samples == null || samples.length < SAMPLE_FLOOR) {
+				toast("Não ouvi nada, fala de novo");
+				return;
+			}
+			toast("Entendendo...");
+			new Thread(() -> {
+				String heard = SherpaVoice.recognize(samples);
+				if (heard == null || heard.isEmpty()) {
+					toast("Não entendi, fala de novo");
+					return;
+				}
+				toast("Ouvi: " + heard);
+				sendVoice(heard);
+			}).start();
+		});
+	}
+
+	private static final int SAMPLE_FLOOR = 8000; // <0.5s ignora
 
 	private void startListening() {
 		try {
@@ -259,6 +317,12 @@ public class VoiceOverlay {
 	}
 
 	private void speak(String text) {
+		if (text == null || text.isEmpty()) return;
+		// Voz neural offline primeiro; Google TTS como reserva
+		if (SherpaVoice.isTtsReady()) {
+			new Thread(() -> SherpaVoice.play(text)).start();
+			return;
+		}
 		if (tts == null) return;
 		try {
 			tts.speak(text, TextToSpeech.QUEUE_ADD, null, "joao" + System.currentTimeMillis());
