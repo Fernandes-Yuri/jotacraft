@@ -153,9 +153,9 @@ local function get_formspec(tabview, name, tabdata)
 		local H = tabview.height
 
 		local hypertext = "<global valign=middle halign=center size=18>" ..
-				fgettext_ne("Luanti is a game-creation platform that allows you to play many different games.") .. "\n" ..
-				fgettext_ne("Luanti doesn't come with a game by default.") .. " " ..
-				fgettext_ne("You need to install a game before you can create a world.")
+				fgettext_ne("JoaoCraft e o jogo do Jota.") .. "\n" ..
+				fgettext_ne("Novos mundos aparecem aqui.") .. " " ..
+				fgettext_ne("Escolha um mundo e divirta-se.")
 
 		local button_y = H * 2/3 - 0.6
 		return table.concat({
