@@ -79,19 +79,21 @@ public class VoiceOverlay {
 			try {
 				FrameLayout root = new FrameLayout(activity);
 				FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
-						dp(56), dp(56), Gravity.END | Gravity.BOTTOM);
-				lp.bottomMargin = dp(150);
-				lp.rightMargin = dp(12);
+						dp(56), dp(56), Gravity.TOP | Gravity.START);
+				// posicao salva (arrastavel) ou padrao canto direito
+				SharedPreferences prefs = activity.getSharedPreferences(
+						PREFS, Activity.MODE_PRIVATE);
+				int defLeft = activity.getResources().getDisplayMetrics().widthPixels
+						- dp(68);
+				lp.leftMargin = prefs.getInt("mic_left", defLeft);
+				lp.topMargin = prefs.getInt("mic_top",
+						activity.getResources().getDisplayMetrics().heightPixels / 2);
 				micButton = new TextView(activity);
 				micButton.setText("\uD83C\uDFA4"); // mic emoji, no asset needed
 				micButton.setTextSize(26);
 				micButton.setGravity(Gravity.CENTER);
 				micButton.setBackgroundColor(0xAA222222);
-				micButton.setOnClickListener(v -> onMicTap());
-				micButton.setOnLongClickListener(v -> {
-					showConfigDialog();
-					return true;
-				});
+				micButton.setOnTouchListener(new DragTapListener(lp));
 				root.addView(micButton, lp);
 				activity.getWindow().addContentView(root,
 						new ViewGroup.LayoutParams(
@@ -104,6 +106,64 @@ public class VoiceOverlay {
 		initTts();
 		startReplyPolling();
 		initOfflineVoice();
+	}
+
+	// Botao que arrasta com o dedo: toque curto = microfone,
+	// segurar parado = configuracao, arrastar = muda de lugar e salva.
+	private class DragTapListener implements android.view.View.OnTouchListener {
+		private final FrameLayout.LayoutParams lp;
+		private float downRawX, downRawY;
+		private int startLeft, startTop;
+		private long downTime;
+		private boolean moved;
+		private final int SLOP;
+
+		DragTapListener(FrameLayout.LayoutParams lp) {
+			this.lp = lp;
+			SLOP = dp(10);
+		}
+
+		@Override
+		public boolean onTouch(android.view.View v, android.view.MotionEvent e) {
+			switch (e.getAction()) {
+				case android.view.MotionEvent.ACTION_DOWN:
+					downRawX = e.getRawX();
+					downRawY = e.getRawY();
+					startLeft = lp.leftMargin;
+					startTop = lp.topMargin;
+					downTime = System.currentTimeMillis();
+					moved = false;
+					return true;
+				case android.view.MotionEvent.ACTION_MOVE: {
+					int dx = (int) (e.getRawX() - downRawX);
+					int dy = (int) (e.getRawY() - downRawY);
+					if (Math.abs(dx) > SLOP || Math.abs(dy) > SLOP) moved = true;
+					if (moved) {
+						lp.leftMargin = Math.max(0, startLeft + dx);
+						lp.topMargin = Math.max(0, startTop + dy);
+						v.setLayoutParams(lp);
+					}
+					return true;
+				}
+				case android.view.MotionEvent.ACTION_UP:
+				case android.view.MotionEvent.ACTION_CANCEL: {
+					long held = System.currentTimeMillis() - downTime;
+					if (moved) {
+						activity.getSharedPreferences(PREFS, Activity.MODE_PRIVATE)
+								.edit()
+								.putInt("mic_left", lp.leftMargin)
+								.putInt("mic_top", lp.topMargin)
+								.apply();
+					} else if (held > 600) {
+						showConfigDialog();
+					} else {
+						onMicTap();
+					}
+					return true;
+			}
+			}
+			return false;
+		}
 	}
 
 	// Voz 100% offline (sherpa-onnx): baixa os modelos uma vez e depois
