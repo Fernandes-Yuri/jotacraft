@@ -304,38 +304,42 @@ public class SherpaVoice {
 		}
 	}
 
-	/** Fala o texto no alto-falante. Roda fora da UI thread. */
+	/** Fala o texto em streaming: o áudio sai enquanto gera (~1s pra começar).
+	 * Roda fora da UI thread. */
 	public static void play(String text) {
 		OfflineTts engine;
 		synchronized (SherpaVoice.class) {
 			engine = tts;
 		}
 		if (engine == null || text == null || text.isEmpty()) return;
+		AudioTrack track = null;
 		try {
-			GeneratedAudio audio = engine.generate(text, 0, 1.0f);
-			if (audio == null) return;
-			float[] samples = audio.getSamples();
-			int sampleRate = audio.getSampleRate();
-			if (samples == null || samples.length == 0) return;
+			int sampleRate = engine.getSampleRate();
 			int bufSize = AudioTrack.getMinBufferSize(sampleRate,
 					AudioFormat.CHANNEL_OUT_MONO,
 					AudioFormat.ENCODING_PCM_FLOAT);
-			AudioTrack track = new AudioTrack(AudioManager.STREAM_MUSIC,
+			track = new AudioTrack(AudioManager.STREAM_MUSIC,
 					sampleRate, AudioFormat.CHANNEL_OUT_MONO,
 					AudioFormat.ENCODING_PCM_FLOAT,
-					Math.max(bufSize, samples.length * 4),
+					Math.max(bufSize, 16384),
 					AudioTrack.MODE_STREAM);
 			track.play();
-			int off = 0;
-			while (off < samples.length) {
-				int chunk = Math.min(4096, samples.length - off);
-				track.write(samples, off, chunk, AudioTrack.WRITE_BLOCKING);
-				off += chunk;
-			}
-			track.stop();
-			track.release();
+			final AudioTrack t = track;
+			engine.generateWithCallback(text, 0, 1.0f, chunk -> {
+				if (chunk != null && chunk.length > 0) {
+					t.write(chunk, 0, chunk.length, AudioTrack.WRITE_BLOCKING);
+				}
+				return 1; // continua gerando
+			});
 		} catch (Exception e) {
 			Log.e(TAG, "play falhou", e);
+		} finally {
+			if (track != null) {
+				try {
+					track.stop();
+				} catch (Exception ignored) {}
+				track.release();
+			}
 		}
 	}
 
