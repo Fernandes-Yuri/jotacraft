@@ -314,7 +314,7 @@ public class SherpaVoice {
 		if (engine == null || text == null || text.isEmpty()) return;
 		AudioTrack track = null;
 		try {
-			int sampleRate = engine.getSampleRate();
+			int sampleRate = engine.sampleRate();
 			int bufSize = AudioTrack.getMinBufferSize(sampleRate,
 					AudioFormat.CHANNEL_OUT_MONO,
 					AudioFormat.ENCODING_PCM_FLOAT);

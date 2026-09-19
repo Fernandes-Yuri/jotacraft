@@ -5,6 +5,7 @@ android {
 	ndkVersion "$ndk_version"
 	defaultConfig {
 		minSdkVersion 21
+		ndk { abiFilters 'arm64-v8a' } // so celular novo: nem compila 32-bit
 		compileSdk = 34
 		targetSdkVersion 34
 		externalNativeBuild {
